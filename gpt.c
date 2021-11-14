@@ -41,6 +41,24 @@
 #define UNIT_SIZE	512
 
 bool dump_opt_verbose;
+bool dump_opt_symbol;
+bool dump_opt_noalt;
+
+static int
+try_known_uuid_to_str(const uuid_t *uuid, char **s)
+{
+	int ret;
+
+	if (dump_opt_symbol) {
+		ret = known_uuid_to_str(uuid, s);
+		if (ret)
+			ret = uuid_to_str(uuid, s);
+	} else {
+		ret = uuid_to_str(uuid, s);
+	}
+
+	return ret;
+}
 
 static int
 dump_header(int fd, off_t hdr_lba, struct gpt_hdr *ret_hdr)
@@ -48,7 +66,7 @@ dump_header(int fd, off_t hdr_lba, struct gpt_hdr *ret_hdr)
 	char buf[UNIT_SIZE] = {0};
 	assert(sizeof(buf) % 512 == 0);
 
-	struct gpt_hdr *hdr = (void*)buf;
+	const struct gpt_hdr *hdr = (void*)buf;
 	off_t hdr_offset = hdr_lba * sizeof(buf);
 
 	int ret = pread(fd, buf, sizeof(buf), hdr_offset);
@@ -67,7 +85,7 @@ dump_header(int fd, off_t hdr_lba, struct gpt_hdr *ret_hdr)
 		return EINVAL;
 	}
 
-	printf("hdr_sig      = \"%c%c%c%c%c%c%c%c\"\n",
+	printf("sig      = \"%c%c%c%c%c%c%c%c\"\n",
 		hdr->hdr_sig[0],
 		hdr->hdr_sig[1],
 		hdr->hdr_sig[2],
@@ -78,28 +96,27 @@ dump_header(int fd, off_t hdr_lba, struct gpt_hdr *ret_hdr)
 		hdr->hdr_sig[7]);
 
 	const unsigned char *p = (void*)&hdr->hdr_revision;
-	printf("hdr_revision = %02x %02x %02x %02x\n",
+	printf("revision = %02x %02x %02x %02x\n",
 		p[0], p[1], p[2], p[3]);
 
-	printf("hdr_size     = %u\n", hdr->hdr_size);
-	printf("hdr_crc_self = 0x%x\n", hdr->hdr_crc_self);
-	printf("hdr_lba_self = 0x%016lx\n", hdr->hdr_lba_self);
-	printf("hdr_lba_alt  = 0x%016lx\n", hdr->hdr_lba_alt);
-	printf("hdr_lba_start= 0x%016lx\n", hdr->hdr_lba_start);
-	printf("hdr_lba_end  = 0x%016lx\n", hdr->hdr_lba_end);
+	printf("size     = %u\n", hdr->hdr_size);
+	printf("crc_self = 0x%x\n", hdr->hdr_crc_self);
+	printf("lba_self = 0x%016lx\n", hdr->hdr_lba_self);
+	printf("lba_alt  = 0x%016lx\n", hdr->hdr_lba_alt);
+	printf("lba_start= 0x%016lx\n", hdr->hdr_lba_start);
+	printf("lba_end  = 0x%016lx\n", hdr->hdr_lba_end);
 
-	const struct uuid *uuid = (void*)&hdr->hdr_uuid;
 	char *s = NULL;
-	ret = uuid_to_str(uuid, &s);
+	ret = try_known_uuid_to_str((void*)&hdr->hdr_uuid, &s);
 	if (ret)
 		return ret;
-	printf("hdr_uuid     = %s\n", s);
+	printf("uuid     = %s\n", s);
 	free(s);
 
-	printf("hdr_lba_table= 0x%016lx\n", hdr->hdr_lba_table);
-	printf("hdr_entries  = %d\n", hdr->hdr_entries);
-	printf("hdr_entsz    = %d\n", hdr->hdr_entsz);
-	printf("hdr_crc_table= 0x%x\n", hdr->hdr_crc_table);
+	printf("lba_table= 0x%016lx\n", hdr->hdr_lba_table);
+	printf("entries  = %d\n", hdr->hdr_entries);
+	printf("entsz    = %d\n", hdr->hdr_entsz);
+	printf("crc_table= 0x%x\n", hdr->hdr_crc_table);
 
 	if (ret_hdr)
 		*ret_hdr = *hdr;
@@ -124,8 +141,8 @@ dump_entries(int fd, const struct gpt_hdr *hdr)
 	int lba_table_sectors = lba_table_size / sizeof(buf);
 	int total = 0;
 
-	printf("%-3s %-36s %-36s %-16s %-16s %s\n",
-		"#", "type", "uniq", "first_lba", "last_lba", "name");
+	printf("%-3s %-36s %-36s %-16s %-16s %-16s %s\n",
+		"#", "type", "uniq", "lba_start", "lba_end", "attr", "name");
 
 	for (int i = 0; i < lba_table_sectors; i++) {
 		off_t offset = (hdr->hdr_lba_table + i) * sizeof(buf);
@@ -139,21 +156,21 @@ dump_entries(int fd, const struct gpt_hdr *hdr)
 		}
 
 		int sector_entries = sizeof(buf) / hdr->hdr_entsz;
-		struct gpt_ent *p = (void*)buf;
+		const struct gpt_ent *p = (void*)buf;
 
 		for (int j = 0; j < sector_entries; j++) {
-			struct gpt_ent empty = {0};
+			const struct gpt_ent empty = {0};
 			if (!dump_opt_verbose &&
 			    !memcmp(p, &empty, sizeof(empty)))
 				goto next;
 
 			char *s1 = NULL;
-			ret = uuid_to_str((void*)&p->ent_type, &s1);
+			ret = try_known_uuid_to_str((void*)&p->ent_type, &s1);
 			if (ret)
 				return ret;
 
 			char *s2 = NULL;
-			ret = uuid_to_str((void*)&p->ent_uuid, &s2);
+			ret = try_known_uuid_to_str((void*)&p->ent_uuid, &s2);
 			if (ret)
 				return ret;
 
@@ -161,12 +178,13 @@ dump_entries(int fd, const struct gpt_hdr *hdr)
 			for (int k = 0; k < 36; k++)
 				name[k] = p->ent_name[k] & 0xFF; /* XXX ascii */
 
-			printf("%-3d %s %s %016lx %016lx %s\n",
+			printf("%-3d %-36s %-36s %016lx %016lx %016lx %s\n",
 				i * sector_entries + j,
 				s1,
 				s2,
 				p->ent_lba_start,
 				p->ent_lba_end,
+				p->ent_attr,
 				name);
 			free(s1);
 			free(s2);
@@ -183,36 +201,40 @@ next:
 int
 dump_gpt(int fd)
 {
+	struct gpt_hdr hdr1 = {0};
+	struct gpt_hdr hdr2 = {0};
 	int ret;
 
 	/* primary header */
-	printf("primay header\n");
-	struct gpt_hdr hdr1;
+	printf("primary header\n");
 	ret = dump_header(fd, 1, &hdr1);
 	if (ret)
 		return ret;
-	printf("\n");
 
 	/* secondary header */
-	printf("secondary header\n");
-	struct gpt_hdr hdr2;
-	ret = dump_header(fd, hdr1.hdr_lba_alt, &hdr2);
-	if (ret)
-		return ret;
-	printf("\n");
+	if (!dump_opt_noalt) {
+		printf("\n");
+		printf("secondary header\n");
+		ret = dump_header(fd, hdr1.hdr_lba_alt, &hdr2);
+		if (ret)
+			return ret;
+	}
 
 	/* primary entries */
-	printf("primay entries\n");
+	printf("\n");
+	printf("primary entries\n");
 	ret = dump_entries(fd, &hdr1);
 	if (ret)
 		return ret;
-	printf("\n");
 
 	/* secondary entries */
-	printf("secondary entries\n");
-	ret = dump_entries(fd, &hdr2);
-	if (ret)
-		return ret;
+	if (!dump_opt_noalt) {
+		printf("\n");
+		printf("secondary entries\n");
+		ret = dump_entries(fd, &hdr2);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }

@@ -1,0 +1,10 @@
+v0.2.0
+======
+- Minor fixes
+- Add --symbol option
+- Add --noalt option
+- Add -v option
+
+v0.1.0
+======
+- Initial release

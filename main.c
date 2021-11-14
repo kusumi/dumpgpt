@@ -36,19 +36,36 @@
 #include "./gpt.h"
 #include "./subr.h"
 
+static const int version[3] = {0, 2, 0};
+
+static void
+print_version(void)
+{
+	printf("%d.%d.%d\n",
+		version[0],
+		version[1],
+		version[2]);
+}
+
 static void
 usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s: <gpt_image_path>\n", progname);
+	fprintf(stderr, "usage: %s: "
+		"[--verbose] "
+		"[--symbol] "
+		"[--noalt] "
+		"[-v] "
+		"[-h] "
+		"[-u] "
+		"<gpt_image_path>"
+		"\n",
+		progname);
 }
 
 int
 main(int argc, char **argv)
 {
-	if (argc < 2) {
-		usage(argv[0]);
-		exit(1);
-	}
+	const char *progname = argv[0];
 
 	if (!is_le()) {
 		fprintf(stderr, "big-endian arch unsupported\n");
@@ -58,24 +75,41 @@ main(int argc, char **argv)
 	int i, c;
 	struct option lo[] = {
 		{"verbose", 0, 0, 'V'},
+		{"symbol", 0, 0, 'S'},
+		{"noalt", 0, 0, 'A'},
 		{0, 0, 0, 0},
 	};
 
-	while ((c = getopt_long(argc, argv, "hu", lo, &i)) != -1) {
+	while ((c = getopt_long(argc, argv, "vhu", lo, &i)) != -1) {
 		switch (c) {
 		case 'V':
 			dump_opt_verbose = 1;
 			break;
+		case 'S':
+			dump_opt_symbol = 1;
+			break;
+		case 'A':
+			dump_opt_noalt = 1;
+			break;
+		case 'v':
+			print_version();
+			exit(1);
+			break;
 		case 'h':
 		case 'u':
 		default:
-			usage(argv[0]);
+			usage(progname);
 			exit(1);
 			break;
 		}
 	}
 	argc -= optind;
 	argv += optind;
+
+	if (argc < 1) {
+		usage(progname);
+		exit(1);
+	}
 
 	const char *device = argv[0];
 	printf("%s\n", device);

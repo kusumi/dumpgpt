@@ -32,6 +32,7 @@
 #include "./freebsd/sys/uuid.h"
 
 int uuid_to_str(const uuid_t *uuid, char **s);
+int known_uuid_to_str(const uuid_t *uuid, char **s);
 int is_le(void);
 
 #endif /* _SUBR_H_ */

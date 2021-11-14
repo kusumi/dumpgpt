@@ -32,6 +32,8 @@
 #include <stdbool.h>
 
 extern bool dump_opt_verbose;
+extern bool dump_opt_symbol;
+extern bool dump_opt_noalt;
 
 int dump_gpt(int fd);
 

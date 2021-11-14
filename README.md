@@ -1,4 +1,4 @@
-dumpgpt (v0.1.0)
+dumpgpt (v0.2.0)
 =======
 
 ## About
@@ -14,7 +14,7 @@ Run make(1) or gmake(1).
 ## Usage
 
     $ ./dumpgpt
-    usage: ./dumpgpt: <gpt_image_path>
+    usage: ./dumpgpt: [--verbose] [--symbol] [--noalt] [-v] [-h] [-u] <gpt_image_path>
 
 ## Resource
 
